@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; font: 14px system-ui, sans-serif; }
+[hidden] { display: none !important; }
+</style>
+<title>블록팝 스테이지</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* Layout: 한 화면 앱. 헤더(스테이지 이동), 보드, 상태 줄, 블록 트레이, 힌트와 다시 시작 */
+:root {
+  --bg: #E8EDF2;
+  --surface: #F6F8FA;
+  --board: #C9D3DD;
+  --empty: #DCE3EA;
+  --wall: #8E9DAD;
+  --fg: #1B2733;
+  --muted: #5A6A7B;
+  --accent: #2F6BFF;
+  --accent-fg: #FFFFFF;
+  --b1: #FF6B5A;
+  --b2: #F2B230;
+  --b3: #22B8A5;
+  --b4: #3E7BFA;
+  --b5: #8C64E8;
+  --b6: #62BE5A;
+  --font-display: 'Jua', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --font-body: 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+  --cell: 48px;
+  --tcell: 22px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11171E;
+    --surface: #19212A;
+    --board: #212C38;
+    --empty: #2B3745;
+    --wall: #4A5A6C;
+    --fg: #E8EEF4;
+    --muted: #92A2B3;
+    --accent: #5B8DFF;
+    --accent-fg: #0B1220;
+    --b1: #FF7B6B;
+    --b2: #F5BC45;
+    --b3: #35C9B6;
+    --b4: #5E93FF;
+    --b5: #A180F0;
+    --b6: #78CF70;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11171E;
+  --surface: #19212A;
+  --board: #212C38;
+  --empty: #2B3745;
+  --wall: #4A5A6C;
+  --fg: #E8EEF4;
+  --muted: #92A2B3;
+  --accent: #5B8DFF;
+  --accent-fg: #0B1220;
+  --b1: #FF7B6B;
+  --b2: #F5BC45;
+  --b3: #35C9B6;
+  --b4: #5E93FF;
+  --b5: #A180F0;
+  --b6: #78CF70;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  padding-block: 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  -webkit-tap-highlight-color: transparent;
+}
+.app {
+  max-width: 420px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+h1 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 32px;
+  line-height: 1;
+  margin: 0;
+}
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 4px;
+}
+.nav .label {
+  font-family: var(--font-display);
+  font-size: 18px;
+  min-width: 96px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.nav button {
+  font: inherit;
+  font-size: 20px;
+  line-height: 1;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+.nav button:disabled { color: var(--muted); opacity: 0.35; cursor: default; }
+.nav button:not(:disabled):hover { background: var(--empty); }
+
+.board-wrap {
+  position: relative;
+  width: max-content;
+  max-width: 100%;
+  margin: 0 auto;
+}
+.board {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  background: var(--board);
+  border-radius: 16px;
+}
+.cell, .pc {
+  width: var(--cell);
+  height: var(--cell);
+  border-radius: 6px;
+}
+.pc { width: var(--tcell); height: var(--tcell); border-radius: 3px; }
+.cell { background: var(--empty); }
+.cell.wall { background: var(--wall); opacity: 0.85; }
+.cell.filled, .pc:not(.void), .ghost .pc {
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18), inset 0 2px 0 rgba(255, 255, 255, 0.3);
+}
+.cell.mine { cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.c1 { background: var(--b1); }
+.c2 { background: var(--b2); }
+.c3 { background: var(--b3); }
+.c4 { background: var(--b4); }
+.c5 { background: var(--b5); }
+.c6 { background: var(--b6); }
+.cell.preview { background: color-mix(in srgb, var(--pc) 55%, var(--empty)); }
+.cell.hint {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+  animation: pulse 0.8s ease-in-out infinite alternate;
+}
+@keyframes pulse { from { filter: brightness(1); } to { filter: brightness(1.22); } }
+.board.win .cell.filled { animation: cheer 0.5s ease-out; }
+@keyframes cheer { 0% { transform: scale(1); } 40% { transform: scale(1.08); } 100% { transform: scale(1); } }
+
+.status {
+  margin: 0;
+  min-height: 1.5em;
+  text-align: center;
+  font-size: 14px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tray {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-content: flex-start;
+  gap: 8px;
+  padding: 10px;
+  min-height: 120px;
+  background: var(--surface);
+  border-radius: 14px;
+}
+.piece {
+  display: grid;
+  gap: 2px;
+  padding: 8px 6px;
+  border-radius: 10px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.piece.dragging { opacity: 0.25; }
+.piece.placed { opacity: 0.12; pointer-events: none; }
+.piece.hint { outline: 3px solid var(--accent); outline-offset: 0; }
+.pc.void { visibility: hidden; }
+
+.ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 50;
+  display: grid;
+  gap: 4px;
+  pointer-events: none;
+  opacity: 0.94;
+  will-change: transform;
+}
+.ghost .pc { width: var(--cell); height: var(--cell); border-radius: 6px; }
+
+.over {
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  padding: 16px;
+}
+.over h2 { font-family: var(--font-display); font-weight: 400; font-size: 30px; margin: 0; }
+.over p { margin: 0; color: var(--muted); }
+
+.btn {
+  font: inherit;
+  font-weight: 700;
+  background: var(--accent);
+  color: var(--accent-fg);
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 20px;
+  cursor: pointer;
+}
+.btn.quiet { background: var(--surface); color: var(--fg); }
+.btn:disabled { opacity: 0.4; cursor: default; }
+.btn:focus-visible, .nav button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.actions { display: flex; gap: 8px; justify-content: center; }
+.hint-text { margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); text-align: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cell.hint, .board.win .cell.filled { animation: none; }
+}
+</style>
+
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>블록팝</h1>
+    <div class="nav">
+      <button id="prev" type="button" aria-label="이전 스테이지">‹</button>
+      <div class="label" id="stageLabel">스테이지 1</div>
+      <button id="next" type="button" aria-label="다음 스테이지">›</button>
+    </div>
+  </header>
+
+  <div class="board-wrap">
+    <div class="board" id="board" aria-label="블록 보드"></div>
+    <div class="over" id="over" hidden>
+      <h2 id="overTitle">클리어!</h2>
+      <p id="overSub"></p>
+      <button class="btn" id="nextStage" type="button">다음 스테이지</button>
+    </div>
+  </div>
+
+  <p class="status" id="status" aria-live="polite"></p>
+
+  <div class="tray" id="tray" aria-label="놓을 블록"></div>
+
+  <div class="actions">
+    <button class="btn" id="hintBtn" type="button">힌트 3</button>
+    <button class="btn quiet" id="restart" type="button">다시 시작</button>
+  </div>
+  <p class="hint-text">모든 블록으로 빈칸을 빈틈없이 채우면 클리어예요. 놓은 블록은 다시 끌어서 옮길 수 있어요.</p>
+</div>
+
+<script>
+(function () {
+  var GAP = 4, PAD = 8, HINTS = 3;
+  var appEl = document.querySelector('.app');
+  var boardEl = document.getElementById('board');
+  var trayEl = document.getElementById('tray');
+  var overEl = document.getElementById('over');
+  var statusEl = document.getElementById('status');
+  var hintBtn = document.getElementById('hintBtn');
+  var prevBtn = document.getElementById('prev');
+  var nextBtn = document.getElementById('next');
+  var labelEl = document.getElementById('stageLabel');
+
+  var N = 4, cells = [], grid = [], pieces = [], trayEls = [];
+  var stage = 1, unlocked = 1, hints = HINTS, cleared = false;
+  var cellSize = 48, drag = null, hintState = null, hintTimer = null, E = 0;
+
+  try { unlocked = Math.max(1, parseInt(localStorage.getItem('blockstage-unlocked'), 10) || 1); } catch (e) { unlocked = 1; }
+  stage = unlocked;
+
+  /* ---------- 스테이지 생성: 보드를 조각으로 쪼개면 정답이 항상 존재해요 ---------- */
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function params(s) {
+    var n = Math.min(8, 4 + Math.floor((s - 1) / 4));
+    return {
+      N: n,
+      E: Math.min(n * n, 10 + 2 * s, 48),
+      pmax: Math.min(6, 3 + Math.floor((s - 1) / 5))
+    };
+  }
+
+  function neighbors(i, n) {
+    var r = (i / n) | 0, c = i % n, out = [];
+    if (r > 0) out.push(i - n);
+    if (r < n - 1) out.push(i + n);
+    if (c > 0) out.push(i - 1);
+    if (c < n - 1) out.push(i + 1);
+    return out;
+  }
+
+  function generate(s) {
+    var rng = mulberry32(s * 7919 + 13);
+    var P = params(s), n = P.N, total = n * n, i;
+    var owner = [];
+    for (i = 0; i < total; i++) owner.push(-1);
+
+    // 벽: 덩어리 모양으로 만들어요
+    var wallCount = total - P.E, walls = [];
+    while (walls.length < wallCount) {
+      var cand;
+      if (!walls.length || rng() < 0.25) {
+        cand = (rng() * total) | 0;
+      } else {
+        var base = walls[(rng() * walls.length) | 0];
+        var nb = neighbors(base, n);
+        cand = nb[(rng() * nb.length) | 0];
+      }
+      if (owner[cand] === -1) { owner[cand] = -2; walls.push(cand); }
+    }
+
+    function freeDeg(j) {
+      var d = 0;
+      neighbors(j, n).forEach(function (k) { if (owner[k] === -1) d++; });
+      return d;
+    }
+
+    var lists = [];
+    function uncovered() {
+      var u = [];
+      for (var j = 0; j < total; j++) if (owner[j] === -1) u.push(j);
+      return u;
+    }
+    var u;
+    while ((u = uncovered()).length) {
+      var minD = 99;
+      u.forEach(function (j) { minD = Math.min(minD, freeDeg(j)); });
+      var starts = u.filter(function (j) { return freeDeg(j) === minD; });
+      var start = starts[(rng() * starts.length) | 0];
+      var pid = lists.length, cs = [start];
+      owner[start] = pid;
+      var target = 2 + ((rng() * (P.pmax - 1)) | 0);
+      while (cs.length < target) {
+        var fr = [];
+        cs.forEach(function (j) {
+          neighbors(j, n).forEach(function (k) { if (owner[k] === -1 && fr.indexOf(k) < 0) fr.push(k); });
+        });
+        if (!fr.length) break;
+        var pick;
+        if (rng() < 0.6) {
+          var mn = 99;
+          fr.forEach(function (j) { mn = Math.min(mn, freeDeg(j)); });
+          var low = fr.filter(function (j) { return freeDeg(j) === mn; });
+          pick = low[(rng() * low.length) | 0];
+        } else {
+          pick = fr[(rng() * fr.length) | 0];
+        }
+        owner[pick] = pid;
+        cs.push(pick);
+      }
+      lists.push(cs);
+    }
+
+    // 한 칸짜리 조각은 이웃 조각에 붙여요
+    for (var a = 0; a < lists.length; a++) {
+      if (lists[a] && lists[a].length === 1) {
+        var only = lists[a][0], best = -1, bestLen = 99;
+        neighbors(only, n).forEach(function (k) {
+          var o = owner[k];
+          if (o >= 0 && o !== a && lists[o] && lists[o].length < bestLen && lists[o].length + 1 <= P.pmax + 1) {
+            best = o; bestLen = lists[o].length;
+          }
+        });
+        if (best >= 0) {
+          lists[best].push(only);
+          owner[only] = best;
+          lists[a] = null;
+        }
+      }
+    }
+    lists = lists.filter(function (x) { return x; });
+
+    // 순서를 섞고 모양을 정리해요
+    for (var m = lists.length - 1; m > 0; m--) {
+      var q = (rng() * (m + 1)) | 0, tmp = lists[m]; lists[m] = lists[q]; lists[q] = tmp;
+    }
+    var ps = lists.map(function (cs2, idx) {
+      var rc = cs2.map(function (j) { return [(j / n) | 0, j % n]; });
+      var minR = 99, minC = 99;
+      rc.forEach(function (p) { minR = Math.min(minR, p[0]); minC = Math.min(minC, p[1]); });
+      rc = rc.map(function (p) { return [p[0] - minR, p[1] - minC]; });
+      rc.sort(function (x, y) { return x[0] - y[0] || x[1] - y[1]; });
+      var w = 0, h = 0;
+      rc.forEach(function (p) { h = Math.max(h, p[0] + 1); w = Math.max(w, p[1] + 1); });
+      return { id: idx, cells: rc, w: w, h: h, color: 1 + (idx % 6), placed: false, key: JSON.stringify(rc) };
+    });
+
+    var g = [];
+    for (i = 0; i < total; i++) g.push(owner[i] === -2 ? -1 : 0);
+    return { N: n, grid: g, pieces: ps, E: P.E };
+  }
+
+  /* ---------- 배치 규칙 ---------- */
+  function fitsIn(g, p, r, c) {
+    if (r < 0 || c < 0 || r + p.h > N || c + p.w > N) return false;
+    for (var k = 0; k < p.cells.length; k++) {
+      if (g[(r + p.cells[k][0]) * N + c + p.cells[k][1]] !== 0) return false;
+    }
+    return true;
+  }
+
+  // 지금 배치에서 이어서 풀 수 있는지 찾아요. 빈칸 하나를 골라 그 칸을 덮는 조각을 차례로 시험해요.
+  function solve() {
+    var g = grid.slice(), used = {}, sol = [], nodes = 0;
+    var rem = pieces.filter(function (p) { return !p.placed; });
+    function dfs() {
+      var first = -1;
+      for (var i = 0; i < g.length; i++) if (g[i] === 0) { first = i; break; }
+      if (first < 0) return true;
+      if (++nodes > 200000) return false;
+      var row = (first / N) | 0, col = first % N, tried = {};
+      for (var k = 0; k < rem.length; k++) {
+        var p = rem[k];
+        if (used[p.id] || tried[p.key]) continue;
+        tried[p.key] = 1;
+        var r0 = row - p.cells[0][0], c0 = col - p.cells[0][1];
+        if (fitsIn(g, p, r0, c0)) {
+          p.cells.forEach(function (x) { g[(r0 + x[0]) * N + c0 + x[1]] = -9; });
+          used[p.id] = true;
+          sol.push({ p: p, r: r0, c: c0 });
+          if (dfs()) return true;
+          sol.pop();
+          used[p.id] = false;
+          p.cells.forEach(function (x) { g[(r0 + x[0]) * N + c0 + x[1]] = 0; });
+        }
+      }
+      return false;
+    }
+    return dfs() ? sol : null;
+  }
+
+  /* ---------- 화면 ---------- */
+  function buildBoard() {
+    boardEl.innerHTML = '';
+    boardEl.style.gridTemplateColumns = 'repeat(' + N + ', var(--cell))';
+    cells = [];
+    for (var i = 0; i < N * N; i++) {
+      (function (idx) {
+        var d = document.createElement('div');
+        d.className = 'cell';
+        d.addEventListener('pointerdown', function (e) { onBoardDown(e, idx); });
+        d.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+        boardEl.appendChild(d);
+        cells.push(d);
+      })(i);
+    }
+  }
+
+  function layout() {
+    var w = appEl.clientWidth;
+    if (!w) return;
+    cellSize = Math.max(24, Math.min(72, Math.floor((w - 2 * PAD - (N - 1) * GAP) / N)));
+    var t = Math.max(14, Math.min(28, Math.round(cellSize * 0.45)));
+    var root = document.documentElement.style;
+    root.setProperty('--cell', cellSize + 'px');
+    root.setProperty('--tcell', t + 'px');
+  }
+
+  function renderBoard() {
+    for (var i = 0; i < cells.length; i++) {
+      var v = grid[i], cls = 'cell';
+      if (v === -1) cls += ' wall';
+      else if (v > 0) cls += ' filled mine c' + pieces[v - 1].color;
+      cells[i].className = cls;
+    }
+    if (hintState) {
+      var hp = pieces[hintState.id];
+      boardEl.style.setProperty('--pc', 'var(--b' + hp.color + ')');
+      hp.cells.forEach(function (k) {
+        cells[(hintState.r + k[0]) * N + hintState.c + k[1]].classList.add('preview', 'hint');
+      });
+    }
+  }
+
+  function makePieceEl(p, ghost) {
+    var el = document.createElement('div');
+    el.className = ghost ? 'ghost' : 'piece';
+    el.style.gridTemplateColumns = 'repeat(' + p.w + ', auto)';
+    var map = {};
+    p.cells.forEach(function (c) { map[c[0] + ',' + c[1]] = true; });
+    for (var r = 0; r < p.h; r++) {
+      for (var c = 0; c < p.w; c++) {
+        var pc = document.createElement('div');
+        pc.className = map[r + ',' + c] ? 'pc c' + p.color : 'pc void';
+        el.appendChild(pc);
+      }
+    }
+    return el;
+  }
+
+  function renderTray() {
+    trayEl.innerHTML = '';
+    trayEls = [];
+    pieces.forEach(function (p) {
+      var el = makePieceEl(p, false);
+      if (p.placed) el.classList.add('placed');
+      if (hintState && hintState.id === p.id) el.classList.add('hint');
+      el.addEventListener('pointerdown', function (e) { startDrag(e, p, el); });
+      el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+      trayEl.appendChild(el);
+      trayEls.push(el);
+    });
+  }
+
+  function updateStatus(text) {
+    if (text) { statusEl.textContent = text; return; }
+    var left = pieces.filter(function (p) { return !p.placed; }).length;
+    statusEl.textContent = '남은 블록 ' + left + '개 · 빈칸 ' + grid.filter(function (v) { return v === 0; }).length + '칸';
+  }
+
+  function updateChrome() {
+    labelEl.textContent = '스테이지 ' + stage;
+    prevBtn.disabled = stage <= 1;
+    nextBtn.disabled = stage >= unlocked;
+    hintBtn.textContent = '힌트 ' + hints;
+    hintBtn.disabled = hints <= 0 || cleared;
+  }
+
+  function clearHint() {
+    hintState = null;
+    if (hintTimer) { clearTimeout(hintTimer); hintTimer = null; }
+  }
+
+  function loadStage(s) {
+    clearHint();
+    stage = s;
+    var g = generate(s);
+    N = g.N; grid = g.grid; pieces = g.pieces; E = g.E;
+    cleared = false;
+    hints = HINTS;
+    boardEl.classList.remove('win');
+    overEl.hidden = true;
+    buildBoard();
+    layout();
+    renderBoard();
+    renderTray();
+    updateStatus();
+    updateChrome();
+  }
+
+  /* ---------- 끌어서 놓기 ---------- */
+  function onBoardDown(e, idx) {
+    if (cleared || drag) return;
+    var v = grid[idx];
+    if (v <= 0) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    var p = pieces[v - 1];
+    for (var i = 0; i < grid.length; i++) if (grid[i] === v) grid[i] = 0;
+    p.placed = false;
+    clearHint();
+    renderBoard();
+    renderTray();
+    updateStatus();
+    startDrag(e, p, trayEls[p.id]);
+  }
+
+  function startDrag(e, p, srcEl) {
+    if (cleared || drag) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    if (hintState) { clearHint(); renderBoard(); renderTray(); srcEl = trayEls[p.id]; }
+    var ghost = makePieceEl(p, true);
+    document.body.appendChild(ghost);
+    srcEl.classList.add('dragging');
+    drag = { p: p, ghost: ghost, src: srcEl, touch: e.pointerType !== 'mouse', r: -1, c: -1, ok: false };
+    move(e);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  }
+
+  function clearPreview() {
+    for (var i = 0; i < cells.length; i++) cells[i].classList.remove('preview');
+  }
+
+  function showPreview(p, r, c) {
+    clearPreview();
+    boardEl.style.setProperty('--pc', 'var(--b' + p.color + ')');
+    p.cells.forEach(function (k) { cells[(r + k[0]) * N + c + k[1]].classList.add('preview'); });
+  }
+
+  function move(e) {
+    if (!drag) return;
+    var p = drag.p;
+    var gw = p.w * cellSize + (p.w - 1) * GAP;
+    var gh = p.h * cellSize + (p.h - 1) * GAP;
+    var left = e.clientX - gw / 2;
+    var top = drag.touch ? e.clientY - gh - 28 : e.clientY - gh / 2;
+    drag.ghost.style.transform = 'translate(' + left + 'px,' + top + 'px)';
+    var o = cells[0].getBoundingClientRect();
+    var step = cellSize + GAP;
+    var c = Math.round((left - o.left) / step);
+    var r = Math.round((top - o.top) / step);
+    var ok = fitsIn(grid, p, r, c);
+    if (r !== drag.r || c !== drag.c || ok !== drag.ok) {
+      drag.r = r; drag.c = c; drag.ok = ok;
+      if (ok) showPreview(p, r, c); else clearPreview();
+    }
+  }
+
+  function up() {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+    window.removeEventListener('pointercancel', up);
+    if (!drag) return;
+    var d = drag;
+    drag = null;
+    d.ghost.remove();
+    clearPreview();
+    if (d.ok) place(d.p, d.r, d.c);
+    else d.src.classList.remove('dragging');
+  }
+
+  function place(p, r, c) {
+    p.cells.forEach(function (k) { grid[(r + k[0]) * N + c + k[1]] = p.id + 1; });
+    p.placed = true;
+    renderBoard();
+    renderTray();
+    updateStatus();
+    if (grid.every(function (v) { return v !== 0; })) win();
+  }
+
+  function win() {
+    cleared = true;
+    if (stage >= unlocked) {
+      unlocked = stage + 1;
+      try { localStorage.setItem('blockstage-unlocked', String(unlocked)); } catch (e) {}
+    }
+    boardEl.classList.add('win');
+    updateChrome();
+    updateStatus('빈칸을 모두 채웠어요');
+    setTimeout(function () {
+      if (!cleared) return;
+      document.getElementById('overTitle').textContent = '스테이지 ' + stage + ' 클리어!';
+      document.getElementById('overSub').textContent = '다음은 스테이지 ' + (stage + 1) + ' 이에요';
+      overEl.hidden = false;
+    }, 450);
+  }
+
+  /* ---------- 버튼 ---------- */
+  hintBtn.addEventListener('click', function () {
+    if (cleared || hints <= 0 || drag) return;
+    var sol = solve();
+    if (!sol) {
+      updateStatus('지금 배치로는 풀 수 없어요. 블록을 몇 개 빼서 다시 놓아 보세요.');
+      return;
+    }
+    if (!sol.length) return;
+    hints--;
+    hintState = { id: sol[0].p.id, r: sol[0].r, c: sol[0].c };
+    renderBoard();
+    renderTray();
+    updateChrome();
+    updateStatus('빛나는 블록이 표시된 자리에 들어가요');
+    var mine = hintState;
+    hintTimer = setTimeout(function () {
+      if (hintState === mine) { clearHint(); renderBoard(); renderTray(); updateStatus(); }
+    }, 4000);
+  });
+  document.getElementById('restart').addEventListener('click', function () { if (!drag) loadStage(stage); });
+  document.getElementById('nextStage').addEventListener('click', function () { loadStage(stage + 1); });
+  prevBtn.addEventListener('click', function () { if (stage > 1 && !drag) loadStage(stage - 1); });
+  nextBtn.addEventListener('click', function () { if (stage < unlocked && !drag) loadStage(stage + 1); });
+  window.addEventListener('resize', layout);
+
+  loadStage(stage);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
+})();
+</script>
+
+</body>
+</html>
