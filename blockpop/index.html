@@ -301,7 +301,7 @@ h1 {
   <div class="actions">
     <button class="btn" id="hintBtn" type="button">힌트 3</button>
     <button class="btn quiet" id="restart" type="button">다시 시작</button>
-    <span class="ver">v4</span>
+    <span class="ver">v6</span>
   </div>
 </div>
 
@@ -320,7 +320,7 @@ h1 {
 
   var N = 4, cells = [], grid = [], pieces = [], trayEls = [];
   var stage = 1, unlocked = 1, hints = HINTS, cleared = false;
-  var cellSize = 48, drag = null, hintState = null, hintTimer = null, E = 0;
+  var cellSize = 48, drag = null, hintState = null, hintTimer = null, E = 0, curSeed = 0;
 
   try { unlocked = Math.max(1, parseInt(localStorage.getItem('blockstage-unlocked'), 10) || 1); } catch (e) { unlocked = 1; }
   stage = unlocked;
@@ -353,8 +353,8 @@ h1 {
     return out;
   }
 
-  function generate(s) {
-    var rng = mulberry32(s * 7919 + 13);
+  function generate(s, seed) {
+    var rng = mulberry32(seed);
     var P = params(s), n = P.N, total = n * n, i;
     var owner = [];
     for (i = 0; i < total; i++) owner.push(-1);
@@ -446,7 +446,7 @@ h1 {
       rc.sort(function (x, y) { return x[0] - y[0] || x[1] - y[1]; });
       var w = 0, h = 0;
       rc.forEach(function (p) { h = Math.max(h, p[0] + 1); w = Math.max(w, p[1] + 1); });
-      return { id: idx, cells: rc, w: w, h: h, color: 1 + (idx % 6), placed: false, key: JSON.stringify(rc) };
+      return { id: idx, cells: rc, w: w, h: h, color: 1 + (idx % 6), placed: false, key: JSON.stringify(rc), hr: minR, hc: minC };
     });
 
     var g = [];
@@ -464,14 +464,47 @@ h1 {
   }
 
   // 지금 배치에서 이어서 풀 수 있는지 찾아요. 빈칸 하나를 골라 그 칸을 덮는 조각을 차례로 시험해요.
+  var solveCut = false;
   function solve() {
     var g = grid.slice(), used = {}, sol = [], nodes = 0;
     var rem = pieces.filter(function (p) { return !p.placed; });
+    solveCut = false;
+
+    // 남은 블록 크기들로 만들 수 있는 합(부분합)
+    function sums() {
+      var ok = [true], i, j;
+      for (i = 0; i < g.length; i++) ok.push(false);
+      rem.forEach(function (p) {
+        if (used[p.id]) return;
+        for (j = g.length; j >= p.cells.length; j--) if (ok[j - p.cells.length]) ok[j] = true;
+      });
+      return ok;
+    }
+    // 빈 영역마다 그 칸 수를 블록 크기의 합으로 만들 수 있어야 해요
+    function feasible() {
+      var ok = sums(), seen = {}, i;
+      for (i = 0; i < g.length; i++) {
+        if (g[i] !== 0 || seen[i]) continue;
+        var stack = [i], size = 0;
+        seen[i] = 1;
+        while (stack.length) {
+          var cur = stack.pop();
+          size++;
+          neighbors(cur, N).forEach(function (k) {
+            if (g[k] === 0 && !seen[k]) { seen[k] = 1; stack.push(k); }
+          });
+        }
+        if (!ok[size]) return false;
+      }
+      return true;
+    }
+
     function dfs() {
       var first = -1;
       for (var i = 0; i < g.length; i++) if (g[i] === 0) { first = i; break; }
       if (first < 0) return true;
-      if (++nodes > 200000) return false;
+      if (++nodes > 400000) { solveCut = true; return false; }
+      if (!feasible()) return false;
       var row = (first / N) | 0, col = first % N, tried = {};
       for (var k = 0; k < rem.length; k++) {
         var p = rem[k];
@@ -591,10 +624,12 @@ h1 {
     if (hintTimer) { clearTimeout(hintTimer); hintTimer = null; }
   }
 
-  function loadStage(s) {
+  // 스테이지를 열 때마다 새 문제를 만들어요. 다시 시작은 같은 문제로 다시 풀어요.
+  function loadStage(s, sameProblem) {
     clearHint();
     stage = s;
-    var g = generate(s);
+    if (!sameProblem || !curSeed) curSeed = (Math.random() * 4294967296) >>> 0;
+    var g = generate(s, curSeed);
     N = g.N; grid = g.grid; pieces = g.pieces; E = g.E;
     cleared = false;
     hints = HINTS;
@@ -711,8 +746,13 @@ h1 {
   hintBtn.addEventListener('click', function () {
     if (cleared || hints <= 0 || drag) return;
     var sol = solve();
+    if (!sol && solveCut) {
+      // 검색이 길어지면 문제를 만들 때 정해 둔 원래 자리를 알려줘요
+      var home = pieces.filter(function (p) { return !p.placed && fitsIn(grid, p, p.hr, p.hc); })[0];
+      if (home) sol = [{ p: home, r: home.hr, c: home.hc }];
+    }
     if (!sol) {
-      updateStatus('이 배치로는 풀 수 없어요. 블록을 빼 보세요');
+      updateStatus(solveCut ? '지금 배치는 계산이 오래 걸려요. 블록을 빼 보세요' : '이 배치로는 풀 수 없어요. 블록을 빼 보세요');
       return;
     }
     if (!sol.length) return;
@@ -727,7 +767,7 @@ h1 {
       if (hintState === mine) { clearHint(); renderBoard(); renderTray(); updateStatus(); }
     }, 4000);
   });
-  document.getElementById('restart').addEventListener('click', function () { if (!drag) loadStage(stage); });
+  document.getElementById('restart').addEventListener('click', function () { if (!drag) loadStage(stage, true); });
   document.getElementById('nextStage').addEventListener('click', function () { loadStage(stage + 1); });
   prevBtn.addEventListener('click', function () { if (stage > 1 && !drag) loadStage(stage - 1); });
   nextBtn.addEventListener('click', function () { if (stage < unlocked && !drag) loadStage(stage + 1); });
