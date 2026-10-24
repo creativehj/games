@@ -190,6 +190,7 @@ h1 {
   flex-wrap: wrap;
   justify-content: center;
   align-content: flex-start;
+  align-items: center;
   gap: 8px;
   padding: 10px;
   min-height: 120px;
@@ -198,6 +199,9 @@ h1 {
 }
 .piece {
   display: grid;
+  grid-auto-rows: var(--tcell);
+  align-content: start;
+  justify-content: start;
   gap: 2px;
   padding: 8px 6px;
   border-radius: 10px;
@@ -217,6 +221,9 @@ h1 {
   top: 0;
   z-index: 50;
   display: grid;
+  grid-auto-rows: var(--cell);
+  align-content: start;
+  justify-content: start;
   gap: 4px;
   pointer-events: none;
   opacity: 0.94;
@@ -528,7 +535,7 @@ h1 {
   function makePieceEl(p, ghost) {
     var el = document.createElement('div');
     el.className = ghost ? 'ghost' : 'piece';
-    el.style.gridTemplateColumns = 'repeat(' + p.w + ', auto)';
+    el.style.gridTemplateColumns = 'repeat(' + p.w + ', ' + (ghost ? 'var(--cell)' : 'var(--tcell)') + ')';
     var map = {};
     p.cells.forEach(function (c) { map[c[0] + ',' + c[1]] = true; });
     for (var r = 0; r < p.h; r++) {
