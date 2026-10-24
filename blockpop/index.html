@@ -80,7 +80,7 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-body);
-  padding-block: 16px;
+  padding-block: 12px;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
   -webkit-tap-highlight-color: transparent;
@@ -90,7 +90,7 @@ body {
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 }
 header {
   display: flex;
@@ -180,7 +180,10 @@ h1 {
   margin: 0;
   min-height: 1.5em;
   text-align: center;
-  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
@@ -192,8 +195,8 @@ h1 {
   align-content: flex-start;
   align-items: center;
   gap: 8px;
-  padding: 10px;
-  min-height: 120px;
+  padding: 8px;
+  min-height: calc(var(--tcell) * 3 + 20px);
   background: var(--surface);
   border-radius: 14px;
 }
@@ -298,7 +301,6 @@ h1 {
     <button class="btn" id="hintBtn" type="button">힌트 3</button>
     <button class="btn quiet" id="restart" type="button">다시 시작</button>
   </div>
-  <p class="hint-text">모든 블록으로 빈칸을 빈틈없이 채우면 클리어예요. 놓은 블록은 다시 끌어서 옮길 수 있어요.</p>
 </div>
 
 <script>
@@ -506,14 +508,20 @@ h1 {
     }
   }
 
+  // 보드 폭에 맞춰 칸 크기를 정하고, 화면 높이를 넘으면 한 화면에 들어올 때까지 줄여요.
   function layout() {
     var w = appEl.clientWidth;
-    if (!w) return;
-    cellSize = Math.max(24, Math.min(72, Math.floor((w - 2 * PAD - (N - 1) * GAP) / N)));
-    var t = Math.max(14, Math.min(28, Math.round(cellSize * 0.45)));
-    var root = document.documentElement.style;
-    root.setProperty('--cell', cellSize + 'px');
-    root.setProperty('--tcell', t + 'px');
+    if (!w || drag) return;
+    var root = document.documentElement, rs = root.style;
+    var maxCell = Math.max(28, Math.min(72, Math.floor((w - 2 * PAD - (N - 1) * GAP) / N)));
+    var cs;
+    for (cs = maxCell; cs >= 28; cs -= 1) {
+      var t = Math.max(14, Math.min(26, Math.round(cs * 0.5)));
+      rs.setProperty('--cell', cs + 'px');
+      rs.setProperty('--tcell', t + 'px');
+      if (root.scrollHeight <= root.clientHeight + 1) break;
+    }
+    cellSize = Math.max(28, cs);
   }
 
   function renderBoard() {
@@ -591,11 +599,11 @@ h1 {
     boardEl.classList.remove('win');
     overEl.hidden = true;
     buildBoard();
-    layout();
     renderBoard();
     renderTray();
-    updateStatus();
+    updateStatus(s === 1 ? '블록을 끌어서 빈칸을 모두 채워 보세요' : '');
     updateChrome();
+    layout();
   }
 
   /* ---------- 끌어서 놓기 ---------- */
@@ -702,7 +710,7 @@ h1 {
     if (cleared || hints <= 0 || drag) return;
     var sol = solve();
     if (!sol) {
-      updateStatus('지금 배치로는 풀 수 없어요. 블록을 몇 개 빼서 다시 놓아 보세요.');
+      updateStatus('이 배치로는 풀 수 없어요. 블록을 빼 보세요');
       return;
     }
     if (!sol.length) return;
@@ -721,7 +729,7 @@ h1 {
   document.getElementById('nextStage').addEventListener('click', function () { loadStage(stage + 1); });
   prevBtn.addEventListener('click', function () { if (stage > 1 && !drag) loadStage(stage - 1); });
   nextBtn.addEventListener('click', function () { if (stage < unlocked && !drag) loadStage(stage + 1); });
-  window.addEventListener('resize', layout);
+  window.addEventListener('resize', function () { if (!drag) layout(); });
 
   loadStage(stage);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
