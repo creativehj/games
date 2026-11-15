@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>코드 실험실</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+/* Layout: 왼쪽에 실행 화면(고정), 오른쪽에 코드 입력, 오류, 체크리스트. 좁은 화면에서는 위아래로 쌓음. */
+:root{
+  color-scheme:light;
+  --bg:#F4F6F7; --surface:#FFFFFF; --ink:#1B2A2F; --muted:#51646B; --line:#D5DDE0;
+  --accent:#0E6B5C; --accent-ink:#FFFFFF;
+  --ok-bg:#DCEFE4; --ok-fg:#14532D; --bad-bg:#FBE3D6; --bad-fg:#7A2E0B; --none-bg:#E7ECEE; --none-fg:#33454C;
+  --font-body:'IBM Plex Sans KR',system-ui,-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#11191C; --surface:#1A2428; --ink:#E6EDEF; --muted:#9FB1B8; --line:#2D3B40;
+    --accent:#5CC4B0; --accent-ink:#08201B;
+    --ok-bg:#1C3A2A; --ok-fg:#A7E3BF; --bad-bg:#432617; --bad-fg:#F5C4A5; --none-bg:#263238; --none-fg:#C5D3D8;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#11191C; --surface:#1A2428; --ink:#E6EDEF; --muted:#9FB1B8; --line:#2D3B40;
+  --accent:#5CC4B0; --accent-ink:#08201B;
+  --ok-bg:#1C3A2A; --ok-fg:#A7E3BF; --bad-bg:#432617; --bad-fg:#F5C4A5; --none-bg:#263238; --none-fg:#C5D3D8;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.6;
+  padding-block:28px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
+header{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;justify-content:space-between}
+h1{margin:0;font-size:28px;line-height:1.25;font-weight:600;text-wrap:balance}
+.lead{margin:4px 0 0;font-size:14px;color:var(--muted)}
+.tally{display:flex;flex-wrap:wrap;gap:8px}
+.pill{font-size:13px;font-weight:600;padding:5px 12px;border-radius:999px;white-space:nowrap}
+.pill.ok{background:var(--ok-bg);color:var(--ok-fg)}
+.pill.bad{background:var(--bad-bg);color:var(--bad-fg)}
+.pill.none{background:var(--none-bg);color:var(--none-fg)}
+.grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:24px;align-items:start}
+@media (max-width:920px){.grid{grid-template-columns:minmax(0,1fr)}}
+.col{display:flex;flex-direction:column;gap:24px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:14px;min-width:0}
+h2{margin:0;font-size:17px;font-weight:600}
+.sub{font-size:13px;color:var(--muted);margin:0}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.seg{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+button,.btn{font-family:inherit;font-size:14px;cursor:pointer;min-height:40px;padding:0 14px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);display:inline-flex;align-items:center;justify-content:center}
+button:hover,.btn:hover{border-color:var(--muted)}
+button[aria-pressed="true"].dev{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+button.warn{border-color:var(--bad-fg);color:var(--bad-fg);font-weight:600}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,.btn:focus-within{outline:3px solid var(--accent);outline-offset:2px}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.stagewrap{display:flex;justify-content:center;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;overflow:hidden}
+.frame{width:100%;max-width:100%;transition:max-width .15s}
+iframe{display:block;width:100%;height:780px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.sticky{position:sticky;top:16px}
+@media (max-width:920px){.sticky{position:static}}
+input[type=text],textarea,select{width:100%;font-family:inherit;font-size:14px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-height:40px}
+textarea{resize:vertical}
+#code{font-family:var(--font-mono);font-size:13px;min-height:200px;line-height:1.5;white-space:pre;overflow:auto}
+#code.drag{border-color:var(--accent);border-style:dashed}
+label.l{font-size:13px;color:var(--muted)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.row>*{min-width:0}
+.errs{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.errs li{display:flex;gap:10px;align-items:baseline;background:var(--bad-bg);color:var(--bad-fg);border-radius:8px;padding:6px 10px;overflow-wrap:anywhere}
+.okline{font-size:14px;color:var(--ok-fg);background:var(--ok-bg);border-radius:8px;padding:6px 10px}
+.limits{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:0}
+.item{display:flex;flex-direction:column;gap:8px;padding:12px 0;border-top:1px solid var(--line)}
+.item:first-of-type{border-top:0}
+.item p{margin:0;overflow-wrap:anywhere}
+.state{display:flex;flex-wrap:wrap;gap:6px}
+.state button{min-height:36px;padding:0 12px;font-size:13px}
+.state button[aria-pressed="true"][data-s="ok"]{background:var(--ok-bg);color:var(--ok-fg);border-color:var(--ok-fg);font-weight:600}
+.state button[aria-pressed="true"][data-s="bad"]{background:var(--bad-bg);color:var(--bad-fg);border-color:var(--bad-fg);font-weight:600}
+.state button[aria-pressed="true"][data-s="none"]{background:var(--none-bg);color:var(--none-fg);border-color:var(--none-fg);font-weight:600}
+.note{font-size:13px;color:var(--muted)}
+.chk{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.chk input{margin-top:5px;width:18px;height:18px;accent-color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>코드 실험실</h1>
+      <p class="lead">HTML 코드를 넣으면 바로 실행해서 눌러 보고, 오류와 확인 결과를 기록합니다.</p>
+    </div>
+    <div class="tally" id="tally" aria-live="polite"></div>
+  </header>
+
+  <div class="grid">
+    <section class="card sticky" aria-labelledby="h-stage">
+      <div class="bar">
+        <h2 id="h-stage">실행 화면</h2>
+        <div class="seg" role="group" aria-label="화면 폭">
+          <button type="button" class="dev" data-w="360px" aria-pressed="true">휴대폰 360</button>
+          <button type="button" class="dev" data-w="768px" aria-pressed="false">태블릿 768</button>
+          <button type="button" class="dev" data-w="100%" aria-pressed="false">넓게</button>
+        </div>
+      </div>
+      <div class="stagewrap"><div class="frame" id="frame"><iframe id="stage" title="실행 화면" sandbox="allow-scripts allow-forms allow-modals"></iframe></div></div>
+    </section>
+
+    <div class="col">
+      <section class="card" aria-labelledby="h-in">
+        <h2 id="h-in">코드 넣기</h2>
+        <div class="row">
+          <select id="testSel" aria-label="저장된 테스트 선택" style="flex:1 1 180px"></select>
+          <button type="button" id="newTest">새 테스트</button>
+          <button type="button" id="delTest">삭제</button>
+        </div>
+        <label class="l" for="tname">테스트 이름</label>
+        <input type="text" id="tname" autocomplete="off">
+        <label class="l" for="code">HTML 코드 (붙여넣기, 또는 파일 올리기 · 끌어다 놓기)</label>
+        <textarea id="code" spellcheck="false" placeholder="여기에 HTML 코드를 붙여 넣으세요"></textarea>
+        <div class="row">
+          <button type="button" class="primary" id="run">실행</button>
+          <label class="btn" for="file" id="fileLabel">파일 올리기<input type="file" id="file" class="vh" accept=".html,.htm,text/html"></label>
+          <button type="button" id="sample">예시 불러오기</button>
+        </div>
+        <label class="chk" for="net"><input type="checkbox" id="net"><span>외부 요청 허용 (기본은 막음)</span></label>
+        <p class="limits">코드는 이 브라우저 안의 격리된 화면에서만 실행됩니다. 출처를 모르는 코드는 넣지 마세요. 저장 기능(localStorage), 서버 연결, API 키가 필요한 기능은 여기서 확인할 수 없고, 한 파일로 된 HTML만 실행됩니다.</p>
+      </section>
+
+      <section class="card" aria-labelledby="h-err">
+        <h2 id="h-err">실행 중 발견된 오류</h2>
+        <div id="errBox" aria-live="polite"></div>
+      </section>
+
+      <section class="card" aria-labelledby="h-check">
+        <h2 id="h-check">직접 확인 체크리스트</h2>
+        <div id="list"></div>
+        <div class="row">
+          <input type="text" id="addText" placeholder="확인할 항목 추가" aria-label="확인할 항목 추가" style="flex:1 1 200px">
+          <button type="button" id="addBtn">추가</button>
+        </div>
+        <label class="l" for="memo">전체 메모</label>
+        <textarea id="memo" style="min-height:88px" placeholder="발견한 것, 개발자에게 전할 것"></textarea>
+        <div class="bar">
+          <button type="button" class="primary" id="copy">개발자에게 넘길 메모 만들기</button>
+          <span class="note" id="copyMsg" aria-live="polite"></span>
+        </div>
+        <textarea id="handoff" readonly hidden aria-label="개발자에게 넘길 메모" style="min-height:140px"></textarea>
+        <p class="note" id="storeNote">표시, 메모, 넣은 코드는 이 기기의 이 브라우저에만 저장됩니다. 다른 기기에서는 보이지 않고, 브라우저 데이터를 지우면 사라집니다.</p>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var KEY = 'code-lab-v1';
+  var BASE = [
+    {id:'run', t:'화면이 열리고 오류 없이 보인다'},
+    {id:'phone', t:'휴대폰 폭(360)에서 화면 안에 들어오고 글자가 읽힌다'},
+    {id:'core', t:'핵심 기능을 처음부터 끝까지 한 번 해 본다'},
+    {id:'edge', t:'엉뚱하게 눌러도 깨지지 않는다 (빈 입력, 연타, 뒤로 가기)'}
+  ];
+  var SAMPLE_NAME = '예시: 클릭 카운터';
+  var SAMPLE_CODE = '<!doctype html>\n<html lang="ko">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>클릭 카운터</title>\n<style>body{font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;margin:0}.box{text-align:center}#n{font-size:56px;margin:12px 0}button{font-size:16px;padding:12px 20px;border-radius:10px;border:1px solid #888;cursor:pointer}</style>\n</head>\n<body>\n<div class="box"><div>눌린 횟수</div><div id="n">0</div><button id="b">누르기</button> <button id="r">처음으로</button></div>\n<script>\nvar n=0,out=document.getElementById("n");\ndocument.getElementById("b").onclick=function(){n++;out.textContent=n};\ndocument.getElementById("r").onclick=function(){n=0;out.textContent=n};\n<\/script>\n</body>\n</html>\n';
+  var $ = function(id){ return document.getElementById(id); };
+  var stage = $('stage'), frame = $('frame');
+
+  function uid(){ return 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function mk(name, code){ return {id:uid(), name:name, code:code, items:{}, custom:[], memo:''}; }
+  var S = {tests:[], cur:null, net:false};
+  try { var raw = localStorage.getItem(KEY); if (raw) S = JSON.parse(raw); } catch(e) {}
+  if (!S.tests || !S.tests.length) { S.tests = [mk(SAMPLE_NAME, SAMPLE_CODE)]; S.cur = S.tests[0].id; }
+  var storeOk = true;
+  function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) { storeOk = false; $('storeNote').textContent = '이 브라우저에서는 저장이 막혀 있어요. 페이지를 닫으면 입력한 내용이 사라집니다.'; } }
+  function cur(){ for (var i = 0; i < S.tests.length; i++) { if (S.tests[i].id === S.cur) return S.tests[i]; } S.cur = S.tests[0].id; return S.tests[0]; }
+
+  /* 실행 */
+  var CSP = '<meta http-equiv="Content-Security-Policy" content="connect-src \'none\'">';
+  var BOOT = '<script>(function(){function s(t,m){try{parent.postMessage({__lab:1,t:t,m:String(m)},"*")}catch(e){}}' +
+    'window.addEventListener("error",function(e){s("error",(e.message||"오류")+(e.lineno?" (줄 "+e.lineno+")":""))});' +
+    'window.addEventListener("unhandledrejection",function(e){s("error","처리되지 않은 오류: "+((e.reason&&e.reason.message)||e.reason))});' +
+    'var ce=console.error;console.error=function(){s("console",Array.prototype.slice.call(arguments).join(" "));ce.apply(console,arguments)};})();<\/script>';
+  function inject(code){
+    var head = (S.net ? '' : CSP) + BOOT;
+    var m = /<head[^>]*>/i.exec(code);
+    if (m) { var i = m.index + m[0].length; return code.slice(0, i) + head + code.slice(i); }
+    return head + code;
+  }
+  var errs = [];
+  function renderErrs(){
+    var box = $('errBox'); box.innerHTML = '';
+    if (!errs.length) { var d = document.createElement('div'); d.className = 'okline'; d.textContent = '지금까지 발견된 오류가 없습니다.'; box.appendChild(d); return; }
+    var ul = document.createElement('ul'); ul.className = 'errs';
+    errs.forEach(function(e){ var li = document.createElement('li'); li.textContent = (e.t === 'console' ? '콘솔 오류: ' : '오류: ') + e.m; ul.appendChild(li); });
+    box.appendChild(ul);
+    var p = document.createElement('p'); p.className = 'note'; p.textContent = 'localStorage 관련 오류는 실험실의 격리 때문에 나타날 수 있어요. 저장 기능은 실제 배포 환경에서 확인하세요.';
+    box.appendChild(p);
+  }
+  window.addEventListener('message', function(ev){
+    if (ev.source !== stage.contentWindow || !ev.data || !ev.data.__lab) return;
+    if (errs.length < 50) { errs.push({t:ev.data.t, m:ev.data.m}); renderErrs(); }
+  });
+  function run(){
+    errs = []; renderErrs();
+    var code = cur().code || '';
+    stage.srcdoc = '';
+    requestAnimationFrame(function(){ stage.srcdoc = code.trim() ? inject(code) : '<p style="font-family:sans-serif;color:#555;padding:16px">코드를 넣고 실행을 누르세요.</p>'; });
+  }
+  $('run').addEventListener('click', run);
+
+  /* 화면 폭 */
+  var devBtns = document.querySelectorAll('button.dev');
+  function setWidth(w){ frame.style.maxWidth = w; devBtns.forEach(function(b){ b.setAttribute('aria-pressed', b.getAttribute('data-w') === w ? 'true' : 'false'); }); }
+  devBtns.forEach(function(b){ b.addEventListener('click', function(){ setWidth(b.getAttribute('data-w')); }); });
+  setWidth('360px');
+
+  /* 외부 요청 */
+  $('net').checked = !!S.net;
+  $('net').addEventListener('change', function(){ S.net = $('net').checked; save(); run(); });
+
+  /* 테스트 선택·추가·삭제 */
+  function renderSel(){
+    var sel = $('testSel'); sel.innerHTML = '';
+    S.tests.forEach(function(t){ var o = document.createElement('option'); o.value = t.id; o.textContent = t.name || '이름 없음'; if (t.id === S.cur) o.selected = true; sel.appendChild(o); });
+  }
+  function loadCur(doRun){
+    var t = cur();
+    $('tname').value = t.name; $('code').value = t.code; $('memo').value = t.memo || '';
+    $('handoff').hidden = true; $('copyMsg').textContent = '';
+    renderSel(); renderList(); tally();
+    if (doRun) run();
+  }
+  $('testSel').addEventListener('change', function(){ S.cur = $('testSel').value; save(); armed = false; $('delTest').textContent = '삭제'; $('delTest').classList.remove('warn'); loadCur(true); });
+  $('newTest').addEventListener('click', function(){ var t = mk('새 테스트', ''); S.tests.push(t); S.cur = t.id; save(); loadCur(true); $('code').focus(); });
+  var armed = false, armTimer = null;
+  $('delTest').addEventListener('click', function(){
+    var b = $('delTest');
+    if (!armed) { armed = true; b.textContent = '정말 삭제'; b.classList.add('warn'); armTimer = setTimeout(function(){ armed = false; b.textContent = '삭제'; b.classList.remove('warn'); }, 4000); return; }
+    clearTimeout(armTimer); armed = false; b.textContent = '삭제'; b.classList.remove('warn');
+    S.tests = S.tests.filter(function(t){ return t.id !== S.cur; });
+    if (!S.tests.length) S.tests = [mk('새 테스트', '')];
+    S.cur = S.tests[0].id; save(); loadCur(true);
+  });
+  $('tname').addEventListener('input', function(){ cur().name = $('tname').value; save(); renderSel(); });
+  $('code').addEventListener('input', function(){ cur().code = $('code').value; save(); });
+  $('sample').addEventListener('click', function(){ var t = mk(SAMPLE_NAME, SAMPLE_CODE); S.tests.push(t); S.cur = t.id; save(); loadCur(true); });
+
+  /* 파일 올리기, 끌어다 놓기 */
+  function takeFile(f){
+    if (!f) return;
+    var r = new FileReader();
+    r.onload = function(){
+      var t = cur(); t.code = String(r.result || '');
+      if (!t.name || t.name === '새 테스트') t.name = f.name.replace(/\.[^.]+$/, '');
+      save(); loadCur(true);
+    };
+    r.readAsText(f);
+  }
+  $('file').addEventListener('change', function(){ takeFile($('file').files[0]); $('file').value = ''; });
+  var codeEl = $('code');
+  ['dragenter','dragover'].forEach(function(n){ codeEl.addEventListener(n, function(e){ e.preventDefault(); codeEl.classList.add('drag'); }); });
+  ['dragleave','drop'].forEach(function(n){ codeEl.addEventListener(n, function(e){ e.preventDefault(); codeEl.classList.remove('drag'); if (n === 'drop' && e.dataTransfer && e.dataTransfer.files.length) takeFile(e.dataTransfer.files[0]); }); });
+
+  /* 체크리스트 */
+  function get(t, id){ return t.items[id] || {s:'none', n:''}; }
+  function allItems(t){ return BASE.concat(t.custom || []); }
+  function tally(){
+    var t = cur(), c = {ok:0, bad:0, none:0};
+    allItems(t).forEach(function(it){ c[get(t, it.id).s]++; });
+    $('tally').innerHTML = '<span class="pill ok">잘 됨 ' + c.ok + '</span><span class="pill bad">문제 ' + c.bad + '</span><span class="pill none">미확인 ' + c.none + '</span>';
+  }
+  function renderList(){
+    var host = $('list'), t = cur(); host.innerHTML = '';
+    allItems(t).forEach(function(it){
+      var row = document.createElement('div'); row.className = 'item';
+      var p = document.createElement('p'); p.textContent = it.t; row.appendChild(p);
+      var st = document.createElement('div'); st.className = 'state'; st.setAttribute('role', 'group'); st.setAttribute('aria-label', it.t);
+      [['none','미확인'],['ok','잘 됨'],['bad','문제']].forEach(function(o){
+        var b = document.createElement('button'); b.type = 'button'; b.setAttribute('data-s', o[0]); b.textContent = o[1];
+        b.setAttribute('aria-pressed', get(t, it.id).s === o[0] ? 'true' : 'false');
+        b.addEventListener('click', function(){
+          var c = get(t, it.id); c.s = o[0]; t.items[it.id] = c; save();
+          st.querySelectorAll('button').forEach(function(x){ x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+          tally();
+        });
+        st.appendChild(b);
+      });
+      row.appendChild(st);
+      var inp = document.createElement('input'); inp.type = 'text'; inp.placeholder = '메모'; inp.value = get(t, it.id).n || '';
+      inp.setAttribute('aria-label', '메모: ' + it.t);
+      inp.addEventListener('input', function(){ var c = get(t, it.id); c.n = inp.value; t.items[it.id] = c; save(); });
+      row.appendChild(inp);
+      host.appendChild(row);
+    });
+  }
+  function addItem(){
+    var v = $('addText').value.trim(); if (!v) return;
+    var t = cur(); t.custom = t.custom || []; t.custom.push({id:uid(), t:v}); $('addText').value = ''; save(); renderList(); tally();
+  }
+  $('addBtn').addEventListener('click', addItem);
+  $('addText').addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); addItem(); } });
+  $('memo').addEventListener('input', function(){ cur().memo = $('memo').value; save(); });
+
+  /* 개발자에게 넘길 메모 */
+  var label = {ok:'잘 됨', bad:'문제', none:'미확인'};
+  $('copy').addEventListener('click', function(){
+    var t = cur();
+    var lines = ['[코드 실험실 테스트 메모] ' + (t.name || '이름 없음'),
+      '화면 폭: ' + (frame.style.maxWidth || '넓게') + ' · 실행 중 발견된 오류 ' + errs.length + '건'];
+    errs.slice(0, 10).forEach(function(e){ lines.push('  - ' + e.m); });
+    lines.push('');
+    allItems(t).forEach(function(it){ var c = get(t, it.id); lines.push('- [' + label[c.s] + '] ' + it.t + (c.n ? ' / 메모: ' + c.n : '')); });
+    if (t.memo) { lines.push('', '전체 메모:', t.memo); }
+    var text = lines.join('\n');
+    var out = $('handoff'); out.hidden = false; out.value = text;
+    var msg = $('copyMsg');
+    function fallback(){ out.focus(); out.select(); msg.textContent = '복사가 막혀 있어요. 아래 글을 직접 선택해 복사하세요.'; }
+    try { navigator.clipboard.writeText(text).then(function(){ msg.textContent = '복사했어요.'; }, fallback); } catch(e) { fallback(); }
+  });
+
+  loadCur(true);
+})();
+</script>
+</body>
+</html>
